@@ -1,0 +1,144 @@
+\documentclass{article}
+\usepackage{blindtext}
+\usepackage[a4paper, total={6in, 8in}]{geometry}
+\usepackage{graphicx}
+\usepackage{colortbl, color, xcolor}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{booktabs}
+\usepackage{enumitem}
+
+\title{NTIRE2026 -- Robust Deepfake Detection Challenge}
+
+\author{[YOUR TEAM NAME HERE]\\
+[YOUR NAME]\thanks{\textcolor{blue}{[YOUR AFFILIATION]}}\\
+}
+
+\begin{document}
+\maketitle
+
+\section{Team details}
+
+\subsection*{[YOUR TEAM NAME]}
+\noindent\textit{\textbf{Title: }} Frequency-Aware Multi-Branch Deepfake Detector with Patch-Based Training\\
+\noindent\textit{\textbf{Members:}}\\ 
+\textit{[TEAM LEADER]$^1$(\href{mailto:[EMAIL]}{[EMAIL]})}, [OTHER MEMBERS]$^{1}$\\
+\noindent\textit{\textbf{Affiliations: }}\\
+$^1$ [YOUR INSTITUTION/AFFILIATION]\\
+
+\noindent\textit{\textbf{CodaBench Username:}} [YOUR USERNAME]\\
+\noindent\textit{\textbf{Code Repository:}} [GITHUB/DRIVE LINK]
+
+\section{Contribution details}
+
+\subsection{Overall Approach}
+Our solution combines three complementary detection strategies to achieve robustness against image degradations:
+
+\textbf{1. Spatial Feature Extraction:} ConvNeXt-Tiny backbone with attention-based pooling extracts texture and artifact patterns from the spatial domain.
+
+\textbf{2. Frequency Analysis:} Fast Fourier Transform (FFT) branch analyzes magnitude spectra to detect GAN upsampling artifacts that persist in frequency domain even under heavy spatial degradation (noise, blur, compression).
+
+\textbf{3. Patch-Based Training:} During training, we randomly extract 4 patches (128×128) per image and average predictions. This prevents the model from memorizing global face identity and forces it to learn local manipulation artifacts.
+
+\textbf{Key Innovation:} The combination of FFT frequency analysis with patch-based training addresses the core challenge — maintaining detection performance when images are degraded by noise, blur, low resolution, and JPEG compression.
+
+\subsection{Architecture Details}
+\begin{itemize}
+    \item \textbf{Backbone:} ConvNeXt-Tiny (28.8M parameters) with ImageNet-1K pre-training
+    \item \textbf{FFT Branch:} 2D Fourier transform → magnitude spectrum → 3-layer CNN encoder (256-dim output)
+    \item \textbf{Fusion:} Concatenate spatial + frequency features → 3-layer MLP with LayerNorm and dropout
+    \item \textbf{Training Strategy:} 
+    \begin{itemize}
+        \item Random patch extraction (4 patches/image, 128×128)
+        \item Label smoothing (0.1) to prevent overconfidence
+        \item Strong augmentation: Gaussian noise, blur, brightness/contrast, horizontal flip
+        \item 85/15 train/val split with cosine LR schedule
+    \end{itemize}
+\end{itemize}
+
+\subsection{References}
+\begin{itemize}
+    \item ConvNeXt: Liu et al., "A ConvNet for the 2020s", CVPR 2022
+    \item Frequency analysis for deepfakes: Frank et al., "Leveraging Frequency Analysis for Deep Fake Image Recognition", ICML 2020
+    \item Patch-based robustness: Inspired by masked image modeling approaches
+\end{itemize}
+
+\section{Global Method Facts}
+
+\begin{enumerate}[label=\alph*)]
+\item \textbf{Total complexity:} 28.8M parameters (ConvNeXt) + 0.5M (FFT branch + fusion head) = 29.3M total
+\item \textbf{Pre-trained models:} ConvNeXt-Tiny pre-trained on ImageNet-1K from timm library
+\item \textbf{Extra data:} No external datasets used beyond the provided 1000 training images
+\item \textbf{Training:} 
+\begin{itemize}
+    \item 30 epochs with early stopping (patience=10)
+    \item Batch size 32, effective batch 32 (no gradient accumulation)
+    \item AdamW optimizer: LR=5e-5, weight decay=1e-4
+    \item Cosine annealing schedule with warmup
+    \item Training time: ~30 minutes on single GPU
+\end{itemize}
+\item \textbf{Testing:} 
+\begin{itemize}
+    \item 3-view TTA: original + horizontal flip + center crop from 1.1× scale
+    \item Inference time: ~2 minutes for 100 images
+    \item No patch extraction at test time (full image used)
+\end{itemize}
+\item \textbf{Advantages:}
+\begin{itemize}
+    \item Frequency branch maintains detection under heavy spatial degradation
+    \item Patch-based training prevents identity memorization and improves generalization
+    \item Lightweight (29M params) enables fast training and inference
+    \item No dependence on external datasets
+\end{itemize}
+\item \textbf{Novelty:} Combination of FFT frequency analysis with patch-based training for robustness. While each component exists in literature, their integration for degradation-robust deepfake detection is novel.
+\end{enumerate}
+
+\begin{table}[htb]
+    \centering
+    \resizebox{\textwidth}{!}{
+    \begin{tabular}{c|c|c|c|c|c|c|c|c|c}
+        Input & Training Time & Epochs & Extra data & Attention & Quantization & Base Model & \# Params. (M) & Runtime & GPU  \\
+        \hline
+        (224, 224, 3) & 30 min & 30 & No & No & No & ConvNeXt-Tiny & 29.3M & 1.2s (100 imgs) & RTX 3060/4060 \\
+    \end{tabular}
+    }
+    \caption{Method specification}
+    \label{tab:methodinfos}
+\end{table}
+
+\section{Technical details}
+
+\textbf{Implementation:}
+\begin{itemize}
+    \item Framework: PyTorch 2.0+
+    \item Libraries: timm (models), albumentations (augmentation), scikit-learn (metrics)
+    \item Optimizer: AdamW with cosine annealing LR schedule
+    \item Loss: Binary cross-entropy with label smoothing (0.1)
+    \item GPU: Trained on NVIDIA RTX 3060/4060 (12GB VRAM sufficient)
+    \item Dataset: 1000 images (500 real, 500 fake) split 85/15 train/val
+\end{itemize}
+
+\textbf{Training strategy:}
+\begin{itemize}
+    \item Patch extraction during training only (4 random 128×128 patches per image)
+    \item Strong augmentation to simulate test-time degradations
+    \item Early stopping based on validation AUC (patience=10 epochs)
+    \item No data augmentation mixup or cutmix (patch extraction provides sufficient regularization)
+\end{itemize}
+
+\section{Other details}
+
+\begin{enumerate}[label=\alph*)]
+\item \textbf{Workshop paper submission:} [YES/NO] - Please update
+
+\item \textbf{Challenge feedback:} The challenge effectively tests robustness to real-world degradations. The validation/test split with different degradation levels appropriately assesses generalization. Suggestion: provide degradation type labels on test set for post-hoc analysis.
+
+\item \textbf{Future challenge suggestions:} 
+\begin{itemize}
+    \item Video-based deepfake detection with temporal artifacts
+    \item Multi-modal detection (image + audio)
+    \item Adversarial robustness track (detection under adversarial attacks)
+\end{itemize}
+\end{enumerate}
+
+\end{document}
